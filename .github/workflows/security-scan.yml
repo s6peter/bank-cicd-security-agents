@@ -51,6 +51,7 @@ jobs:
         run: .venv/bin/banksec run --scanner semgrep --scan semgrep-${{ matrix.language }}.json --repo . --output-dir artifacts/semgrep-${{ matrix.language }}
       - name: Upload Semgrep SARIF
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
         with:
           sarif_file: artifacts/semgrep-${{ matrix.language }}/banksec.sarif
@@ -96,6 +97,7 @@ jobs:
         run: .venv/bin/banksec run --scanner trivy --scan trivy.json --repo . --output-dir artifacts/trivy
       - name: Upload Trivy SARIF
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
         with:
           sarif_file: artifacts/trivy/banksec.sarif
@@ -146,6 +148,7 @@ jobs:
       - run: .venv/bin/ruff check tools/banksec/src tools/banksec/tests
       - run: .venv/bin/pytest tools/banksec/tests --cov=banksec_agents --cov-report=term-missing
       - run: cd tools/banksec && ../../.venv/bin/python -m build
+      - run: mkdir -p artifacts
       - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
