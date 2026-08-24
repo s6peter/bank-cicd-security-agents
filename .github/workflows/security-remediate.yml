@@ -1,0 +1,102 @@
+name: Controlled Bedrock remediation
+
+on:
+  workflow_dispatch:
+    inputs:
+      scanner:
+        description: Scanner to run
+        required: true
+        type: choice
+        options: [trivy, semgrep]
+      apply_patch:
+        description: Apply a validated patch and open a PR
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banksec-remediation-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    environment: security-remediation
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.BANKSEC_BEDROCK_ROLE_ARN }}
+          aws-region: ${{ vars.BANKSEC_AWS_REGION || 'us-east-1' }}
+      - name: Install approved tooling
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e './tools/banksec[dev]' semgrep
+      - name: Run Semgrep
+        if: inputs.scanner == 'semgrep'
+        run: .venv/bin/semgrep scan --config config/semgrep.yml --json --output scan.json
+      - name: Run Trivy
+        if: inputs.scanner == 'trivy'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: scan.json
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+      - name: Invoke Strands agents through Amazon Bedrock
+        env:
+          SCANNER: ${{ inputs.scanner }}
+          APPLY_PATCH: ${{ inputs.apply_patch }}
+          BEDROCK_MODEL_ID: ${{ vars.BANKSEC_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}
+        run: |
+          args=(run --scanner "$SCANNER" --scan scan.json --repo . --output-dir artifacts --use-bedrock)
+          if [ "$APPLY_PATCH" = "true" ]; then args+=(--apply); fi
+          .venv/bin/banksec "${args[@]}"
+      - name: Run fixed, organization-approved validation suite
+        if: inputs.apply_patch
+        run: |
+          .venv/bin/ruff check tools/banksec/src tools/banksec/tests
+          .venv/bin/pytest tools/banksec/tests --cov=banksec_agents --cov-report=term-missing
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: remediation-evidence-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 90
+      - name: Open review-only patch PR
+        if: inputs.apply_patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: banksec/remediation-${{ github.run_id }}
+        run: |
+          if git diff --quiet; then
+            echo "No validated patch was produced" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "banksec-remediation[bot]"
+          git config user.email "banksec-remediation[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add -- . ':!.github/workflows/**' ':!policies/**' ':!infra/iam/**' \
+            ':!src/banksec_agents/resources/**'
+          git commit -m "security: apply policy-controlled remediation"
+          git push origin "$BRANCH"
+          gh pr create --base "${{ github.event.repository.default_branch }}" --head "$BRANCH" \
+            --title "Security remediation (run ${{ github.run_id }})" \
+            --body-file docs/pull-request-body.md \
+            --label security,agent-generated

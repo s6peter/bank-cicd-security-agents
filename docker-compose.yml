@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: voting
+      POSTGRES_USER: voting
+      POSTGRES_PASSWORD: voting
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voting -d voting"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api-python:
+    build:
+      context: ./services/api-python
+    environment:
+      DATABASE_URL: postgresql://voting:voting@db:5432/voting
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web-node:
+    build:
+      context: ./services/web-node
+    environment:
+      API_BASE_URL: http://api-python:8000
+      PORT: 3000
+    ports:
+      - "3100:3000"
+    depends_on:
+      - api-python
+
+  worker-go:
+    build:
+      context: ./services/worker-go
+    environment:
+      DATABASE_URL: postgres://voting:voting@db:5432/voting?sslmode=disable
+      POLL_SECONDS: 15
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

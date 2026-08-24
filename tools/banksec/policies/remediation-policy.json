@@ -1,0 +1,52 @@
+{
+  "policy_version": "1.0.0",
+  "owner": "Enterprise Application Security",
+  "auto_patch": {
+    "maximum_risk_score": 69,
+    "minimum_agent_confidence": 0.9,
+    "require_independent_agent_review": true,
+    "require_all_tests": true,
+    "allow_auto_merge": false
+  },
+  "patch_limits": {
+    "maximum_files": 8,
+    "maximum_changed_lines": 500,
+    "maximum_patches_per_run": 3
+  },
+  "protected_paths": [
+    "**/auth/**",
+    "**/authorization/**",
+    "**/payments/**",
+    "**/crypto/**",
+    "**/customer-data/**",
+    "**/pii/**",
+    "infra/**",
+    "terraform/**"
+  ],
+  "never_modify": [
+    ".github/workflows/**",
+    ".github/CODEOWNERS",
+    "**/CODEOWNERS",
+    "policies/**",
+    "**/resources/policies/**",
+    "infra/iam/**",
+    "**/*.pem",
+    "**/*.key",
+    "**/.env*"
+  ],
+  "required_status_checks": [
+    "semgrep-python",
+    "semgrep-javascript-typescript",
+    "semgrep-go",
+    "semgrep-node",
+    "trivy-filesystem-scan",
+    "dependency-review",
+    "test-sbom-provenance"
+  ],
+  "approvals": {
+    "minimum_reviewers": 2,
+    "require_code_owner": true,
+    "require_security_reviewer_for_high_or_critical": true,
+    "require_change_ticket_for_production": true
+  }
+}

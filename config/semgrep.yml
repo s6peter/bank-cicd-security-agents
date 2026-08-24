@@ -1,0 +1,95 @@
+rules:
+  - id: bank.python.dynamic-code-execution
+    languages: [python]
+    severity: ERROR
+    message: Dynamic code execution can allow attacker-controlled input to run as code.
+    metadata:
+      cwe: CWE-95
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)
+
+  - id: bank.python.subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: Shell execution expands injection risk; use an argument list without a shell.
+    metadata:
+      cwe: CWE-78
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FUNC(..., shell=True, ...)
+          - pattern: subprocess.$FUNC(..., shell = True, ...)
+
+  - id: bank.python.weak-hash-security
+    languages: [python]
+    severity: WARNING
+    message: MD5 and SHA-1 are not approved for security-sensitive hashing.
+    metadata:
+      cwe: CWE-328
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: hashlib.sha1(...)
+
+  - id: bank.javascript.dynamic-code-execution
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Dynamic JavaScript execution can allow attacker-controlled input to run as code.
+    metadata:
+      cwe: CWE-95
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: new Function(...)
+
+  - id: bank.javascript.child-process-exec
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: child_process.exec invokes a shell; prefer execFile or spawn with an argument list.
+    metadata:
+      cwe: CWE-78
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec(...)
+          - pattern: exec(...)
+
+  - id: bank.go.command-shell
+    languages: [go]
+    severity: ERROR
+    message: Executing a shell command expands injection risk; call the executable directly.
+    metadata:
+      cwe: CWE-78
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    pattern: exec.Command("sh", "-c", ...)
+
+  - id: bank.go.weak-hash-security
+    languages: [go]
+    severity: WARNING
+    message: MD5 and SHA-1 are not approved for security-sensitive hashing.
+    metadata:
+      cwe: CWE-328
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: md5.New()
+          - pattern: sha1.New()

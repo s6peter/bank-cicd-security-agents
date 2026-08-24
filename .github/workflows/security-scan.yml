@@ -1,0 +1,166 @@
+name: Enterprise security scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep-code-scan:
+    name: semgrep-${{ matrix.language }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            include_globs: "--include '*.py'"
+          - language: javascript-typescript
+            include_globs: "--include '*.js' --include '*.jsx' --include '*.ts' --include '*.tsx'"
+          - language: go
+            include_globs: "--include '*.go'"
+          - language: node
+            include_globs: "--include '*.js' --include '*.jsx' --include '*.ts' --include '*.tsx' --include 'package.json' --include 'package-lock.json' --include 'yarn.lock' --include 'pnpm-lock.yaml'"
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install controlled pipeline and Semgrep
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e './tools/banksec[dev]' semgrep
+      - name: Run Semgrep for ${{ matrix.language }}
+        run: .venv/bin/semgrep scan --config config/semgrep.yml ${{ matrix.include_globs }} --json --output semgrep-${{ matrix.language }}.json
+      - name: Normalize Semgrep and produce GitHub SARIF
+        run: .venv/bin/banksec run --scanner semgrep --scan semgrep-${{ matrix.language }}.json --repo . --output-dir artifacts/semgrep-${{ matrix.language }}
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          sarif_file: artifacts/semgrep-${{ matrix.language }}/banksec.sarif
+          category: semgrep-banksec-${{ matrix.language }}
+      - name: Enforce high-risk Semgrep policy gate
+        run: .venv/bin/banksec gate --assessments artifacts/semgrep-${{ matrix.language }}/assessments.json --fail-on high
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: semgrep-evidence-${{ matrix.language }}
+          path: |
+            artifacts/semgrep-${{ matrix.language }}/
+            semgrep-${{ matrix.language }}.json
+          retention-days: 30
+
+  trivy-filesystem-scan:
+    name: trivy-filesystem-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install controlled pipeline
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e './tools/banksec[dev]'
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy.json
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+      - name: Normalize Trivy and produce GitHub SARIF
+        run: .venv/bin/banksec run --scanner trivy --scan trivy.json --repo . --output-dir artifacts/trivy
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          sarif_file: artifacts/trivy/banksec.sarif
+          category: trivy-banksec
+      - name: Enforce high-risk policy gate
+        run: .venv/bin/banksec gate --assessments artifacts/trivy/assessments.json --fail-on high
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: trivy-evidence
+          path: |
+            artifacts/trivy/
+            trivy.json
+          retention-days: 30
+
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  test-and-sbom:
+    name: test-sbom-provenance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -e './tools/banksec[dev]'
+      - run: .venv/bin/ruff check tools/banksec/src tools/banksec/tests
+      - run: .venv/bin/pytest tools/banksec/tests --cov=banksec_agents --cov-report=term-missing
+      - run: cd tools/banksec && ../../.venv/bin/python -m build
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: artifacts/sbom.cdx.json
+          upload-artifact: false
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+        if: github.event_name == 'push'
+        with:
+          subject-path: tools/banksec/dist/*.whl
+          sbom-path: artifacts/sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-sbom
+          path: |
+            tools/banksec/dist/
+            artifacts/sbom.cdx.json
+          retention-days: 90

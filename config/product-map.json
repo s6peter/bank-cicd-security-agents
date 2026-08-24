@@ -1,0 +1,11 @@
+{
+  "django": "django",
+  "go": "go",
+  "node": "nodejs",
+  "php": "php",
+  "postgresql": "postgresql",
+  "python": "python",
+  "ruby": "ruby-on-rails",
+  "spring-boot": "spring-boot"
+}
+

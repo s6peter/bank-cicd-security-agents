@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Least-privilege GitHub OIDC role for the BankSec remediation workflow
+
+Parameters:
+  GitHubOidcProviderArn:
+    Type: String
+    Description: Existing IAM OIDC provider ARN for token.actions.githubusercontent.com
+  GitHubOrganization:
+    Type: String
+  GitHubRepository:
+    Type: String
+  BedrockModelArnPattern:
+    Type: String
+    Default: arn:aws:bedrock:*::foundation-model/amazon.nova-*
+    Description: Restrict this to the approved model or inference-profile ARN in production
+
+Resources:
+  GitHubBedrockRemediationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub banksec-${GitHubRepository}-bedrock-remediation
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrganization}/${GitHubRepository}:environment:security-remediation
+      Policies:
+        - PolicyName: invoke-approved-bedrock-model
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Ref BedrockModelArnPattern
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt GitHubBedrockRemediationRole.Arn
+

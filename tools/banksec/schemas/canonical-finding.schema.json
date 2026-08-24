@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.bank/schemas/canonical-finding.schema.json",
+  "title": "Canonical Security Finding",
+  "type": "object",
+  "required": ["finding_id", "scanner", "rule_id", "title", "description", "severity", "location"],
+  "properties": {
+    "finding_id": {"type": "string", "minLength": 12},
+    "scanner": {"type": "string"},
+    "rule_id": {"type": "string"},
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+    "cvss": {"type": ["number", "null"], "minimum": 0, "maximum": 10},
+    "cves": {"type": "array", "items": {"type": "string"}},
+    "cwes": {"type": "array", "items": {"type": "string"}},
+    "component": {"type": "string"},
+    "installed_version": {"type": "string"},
+    "fixed_version": {"type": "string"},
+    "location": {
+      "type": "object",
+      "required": ["path", "start_line", "end_line"],
+      "properties": {
+        "path": {"type": "string"},
+        "start_line": {"type": "integer", "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}
+
