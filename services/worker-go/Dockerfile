@@ -5,7 +5,7 @@ RUN go mod download
 COPY main.go .
 RUN CGO_ENABLED=0 go build -o /season-worker .
 
-FROM alpine:3.21
+FROM alpine:3.24
 WORKDIR /app
 COPY --from=build /season-worker /app/season-worker
 CMD ["/app/season-worker"]
