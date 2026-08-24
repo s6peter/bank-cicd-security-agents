@@ -57,7 +57,7 @@ jobs:
           category: semgrep-banksec-${{ matrix.language }}
       - name: Enforce high-risk Semgrep policy gate
         run: .venv/bin/banksec gate --assessments artifacts/semgrep-${{ matrix.language }}/assessments.json --fail-on high
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: semgrep-evidence-${{ matrix.language }}
@@ -102,7 +102,7 @@ jobs:
           category: trivy-banksec
       - name: Enforce high-risk policy gate
         run: .venv/bin/banksec gate --assessments artifacts/trivy/assessments.json --fail-on high
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: trivy-evidence
@@ -157,7 +157,7 @@ jobs:
         with:
           subject-path: tools/banksec/dist/*.whl
           sbom-path: artifacts/sbom.cdx.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-sbom
           path: |
