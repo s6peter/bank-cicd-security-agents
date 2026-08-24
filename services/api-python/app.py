@@ -70,3 +70,5 @@ def results():
     totals = {season: 0 for season in SEASONS}
     totals.update({season: count for season, count in rows})
     return jsonify({"question": "What is your favorite season?", "results": totals})
+
+#so it can run
