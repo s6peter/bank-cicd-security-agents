@@ -115,7 +115,13 @@ jobs:
 
   dependency-review:
     name: dependency-review
-    if: github.event_name == 'pull_request'
+    # dependency-review-action needs the Dependency Graph plus GitHub Advanced
+    # Security. On a private repo without a GHAS licence the action hard-fails
+    # with "Dependency review is not supported on this repository", so every PR
+    # run goes red. Skip it there instead; it starts running automatically if
+    # the repo is made public or GHAS is enabled. Dependency CVEs are still
+    # covered by the Trivy filesystem scan. Licence denial is not - see README.
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
