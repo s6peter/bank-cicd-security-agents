@@ -156,7 +156,7 @@ jobs:
           output-file: artifacts/sbom.cdx.json
           upload-artifact: false
       - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.event.repository.private == false
         with:
           subject-path: tools/banksec/dist/*.whl
           sbom-path: artifacts/sbom.cdx.json
