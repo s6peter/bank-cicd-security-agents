@@ -161,7 +161,7 @@ jobs:
           format: cyclonedx-json
           output-file: artifacts/sbom.cdx.json
           upload-artifact: false
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         if: github.event_name == 'push' && github.event.repository.private == false
         with:
           subject-path: tools/banksec/dist/*.whl
